@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"time"
+	"wb_l0/pkg/handler/nats_streaming"
+	"wb_l0/pkg/service"
 )
 
 const (
@@ -26,14 +28,17 @@ func NewApp() *App {
 }
 
 func (a *App) Run(port string) {
+	services := service.NewService()
+	handlers := nats_streaming.NewHandler(services)
+
 	a.runServer()
-	a.runStanSub(natsURL)
+	a.runStanSub(natsURL, handlers.CreateOrder)
 }
 
 func (a *App) runServer() {
 }
 
-func (a *App) runStanSub(natsServerURL string) {
+func (a *App) runStanSub(natsServerURL string, handler func(msg *stan.Msg)) {
 	var (
 		clusterID, clientID = clusterName, clientName
 		URL                 string
@@ -98,7 +103,7 @@ func (a *App) runStanSub(natsServerURL string) {
 	subj, i := subject, 0
 	mcb := func(msg *stan.Msg) {
 		i++
-		log.Printf("[#%d] Received: %s\n", i, msg)
+		handler(msg)
 	}
 
 	sub, err := sc.QueueSubscribe(subj, qgroup, mcb, startOpt, stan.DurableName(durable))

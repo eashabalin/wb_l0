@@ -1,4 +1,4 @@
-package stan
+package nats_streaming
 
 import "wb_l0/pkg/service"
 
