@@ -1,16 +1,14 @@
 package model
 
-import "time"
-
 type Payment struct {
-	transaction     string
-	requestID       string
-	currency        string
-	provider        string
-	amount          int
-	paymentDatetime time.Time
-	bank            string
-	deliveryCost    int
-	goodsTotal      int
-	customFee       int
+	Transaction     string `json:"transaction"`
+	RequestID       string `json:"request_id"`
+	Currency        string `json:"currency"`
+	Provider        string `json:"provider"`
+	Amount          int    `json:"amount"`
+	PaymentDatetime int    `json:"payment_dt"`
+	Bank            string `json:"bank"`
+	DeliveryCost    int    `json:"delivery_cost"`
+	GoodsTotal      int    `json:"goods_total"`
+	CustomFee       int    `json:"custom_fee"`
 }

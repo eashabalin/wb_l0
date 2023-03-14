@@ -2,14 +2,18 @@ package app
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 	"github.com/nats-io/stan.go/pb"
+	"github.com/spf13/viper"
 	"log"
 	"os"
 	"os/signal"
 	"time"
 	"wb_l0/pkg/handler/nats_streaming"
+	"wb_l0/pkg/repository"
 	"wb_l0/pkg/service"
 )
 
@@ -27,8 +31,37 @@ func NewApp() *App {
 	return &App{}
 }
 
-func (a *App) Run(port string) {
-	services := service.NewService()
+func (a *App) initConfigs() error {
+	err := godotenv.Load()
+	if err != nil {
+		return err
+	}
+
+	viper.AddConfigPath("config")
+	viper.SetConfigName("config")
+	return viper.ReadInConfig()
+}
+
+func (a *App) Run() {
+	err := a.initConfigs()
+	if err != nil {
+		log.Fatalln("error occurred while reading configs: ", err)
+	}
+
+	db, err := repository.NewPostgresDB(repository.Config{
+		Host:     viper.GetString("db.host"),
+		Port:     viper.GetString("db.port"),
+		Username: viper.GetString("db.username"),
+		Password: os.Getenv("DB_PASSWORD"),
+		DBName:   viper.GetString("db.dbname"),
+		SSLMode:  viper.GetString("db.sslmode"),
+	})
+	if err != nil {
+		log.Fatalln("error occurred while connecting to database: ", err)
+	}
+
+	repos := repository.NewRepository(db)
+	services := service.NewService(repos)
 	handlers := nats_streaming.NewHandler(services)
 
 	a.runServer()
