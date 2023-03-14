@@ -5,6 +5,22 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+const (
+	deliveryServiceTable  = "delivery_services"
+	localesTable          = "locales"
+	banksTable            = "banks"
+	regionsTable          = "regions"
+	citiesTable           = "cities"
+	deliveriesTable       = "deliveries"
+	paymentProvidersTable = "payment_providers"
+	brandsTable           = "brands"
+	currenciesTable       = "currencies"
+	paymentsTable         = "payments"
+	itemsTable            = "items"
+	ordersItemsTable      = "orders_items"
+	ordersTable           = "orders"
+)
+
 type Config struct {
 	Host     string
 	Port     string
