@@ -23,22 +23,76 @@ func (r *OrderPostgres) Create(order model.Order) (string, error) {
 		return "", err
 	}
 
+	// firstly create delivery_service
+	// secondly locale
+	// thirdly delivery
+	// fourthly payment
+	// then items
+
 	fmt.Printf("%+v\n", order)
 
-	// save to postgres
-	id, err := r.createPayment(tx, order.Payment, order.OrderUID)
+	deliveryServiceID, err := r.getDeliveryServiceIDByName(order.DeliveryService)
 	if err != nil {
-		fmt.Println("error: ", err)
+		deliveryServiceID, err = r.createDeliveryService(tx, order.DeliveryService)
+		if err != nil {
+			tx.Rollback()
+			return "", err
+		}
+	}
+
+	localeID, err := r.getLocaleIDByName(order.Locale)
+	if err != nil {
+		localeID, err = r.createLocale(tx, order.Locale)
+		if err != nil {
+			tx.Rollback()
+			return "", err
+		}
+	}
+
+	query := fmt.Sprintf("insert into %s (order_uid, track_number, entry, locale_id, internal_signature, customer_id, delivery_service_id, shardkey, sm_id, date_created, oof_shard) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", ordersTable)
+
+	_, err = tx.Exec(
+		query,
+		order.UID,
+		order.TrackNumber,
+		order.Entry, localeID,
+		order.InternalSignature,
+		order.CustomerID, deliveryServiceID,
+		order.ShardKey, order.SmID,
+		order.DateCreated,
+		order.OofShard,
+	)
+	if err != nil {
+		tx.Rollback()
 		return "", err
 	}
-	fmt.Println("id: ", id)
 
-	return "", tx.Commit()
+	_, err = r.createDelivery(tx, order.Delivery, order.UID)
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	_, err = r.createPayment(tx, order.Payment, order.UID)
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	for _, item := range order.Items {
+		_, _, err = r.createOrderItem(tx, item, order.UID)
+		if err != nil {
+			tx.Rollback()
+			return "", err
+		}
+	}
+
+	return order.UID, tx.Commit()
 }
 
 func (r *OrderPostgres) getDeliveryServiceIDByName(name string) (int, error) {
-	query := fmt.Sprintf("select * from %s where delivery_service = '%s'", deliveryServiceTable, name)
-	row := r.db.QueryRow(query)
+	query := fmt.Sprintf("select id from %s where delivery_service = $1", deliveryServiceTable)
+	row := r.db.QueryRow(query, name)
 	var id int
 	err := row.Scan(&id)
 	return id, err
@@ -54,8 +108,8 @@ func (r *OrderPostgres) createDeliveryService(tx *sql.Tx, name string) (int, err
 }
 
 func (r *OrderPostgres) getLocaleIDByName(name string) (int, error) {
-	query := fmt.Sprintf("select * from %s where locale = '%s'", localesTable, name)
-	row := r.db.QueryRow(query)
+	query := fmt.Sprintf("select id from %s where locale = $1", localesTable)
+	row := r.db.QueryRow(query, name)
 	var id int
 	err := row.Scan(&id)
 	return id, err
@@ -71,8 +125,8 @@ func (r *OrderPostgres) createLocale(tx *sql.Tx, name string) (int, error) {
 }
 
 func (r *OrderPostgres) getBankIDByName(name string) (int, error) {
-	query := fmt.Sprintf("select * from %s where bank = '%s'", banksTable, name)
-	row := r.db.QueryRow(query)
+	query := fmt.Sprintf("select id from %s where bank = $1", banksTable)
+	row := r.db.QueryRow(query, name)
 	var id int
 	err := row.Scan(&id)
 	return id, err
@@ -88,7 +142,7 @@ func (r *OrderPostgres) createBank(tx *sql.Tx, name string) (int, error) {
 }
 
 func (r *OrderPostgres) getRegionIDByName(name string) (int, error) {
-	query := fmt.Sprintf("select * from %s where region = $1", regionsTable)
+	query := fmt.Sprintf("select id from %s where region = $1", regionsTable)
 	row := r.db.QueryRow(query, name)
 	var id int
 	err := row.Scan(&id)
@@ -105,7 +159,7 @@ func (r *OrderPostgres) createRegion(tx *sql.Tx, name string) (int, error) {
 }
 
 func (r *OrderPostgres) getPaymentProviderIDByName(name string) (int, error) {
-	query := fmt.Sprintf("select * from %s where provider = $1", paymentProvidersTable)
+	query := fmt.Sprintf("select id from %s where provider = $1", paymentProvidersTable)
 	row := r.db.QueryRow(query, name)
 	var id int
 	err := row.Scan(&id)
@@ -122,7 +176,7 @@ func (r *OrderPostgres) createPaymentProvider(tx *sql.Tx, name string) (int, err
 }
 
 func (r *OrderPostgres) getBrandIDByName(name string) (int, error) {
-	query := fmt.Sprintf("select * from %s where brand = $1", brandsTable)
+	query := fmt.Sprintf("select id from %s where brand = $1", brandsTable)
 	row := r.db.QueryRow(query, name)
 	var id int
 	err := row.Scan(&id)
@@ -139,7 +193,7 @@ func (r *OrderPostgres) createBrand(tx *sql.Tx, name string) (int, error) {
 }
 
 func (r *OrderPostgres) getCurrencyIDByName(name string) (int, error) {
-	query := fmt.Sprintf("select * from %s where currency = &1", currenciesTable)
+	query := fmt.Sprintf("select id from %s where currency = $1", currenciesTable)
 	row := r.db.QueryRow(query, name)
 	var id int
 	err := row.Scan(&id)
@@ -244,4 +298,63 @@ func (r *OrderPostgres) createPayment(tx *sql.Tx, payment model.Payment, orderUI
 		return "", err
 	}
 	return uid, err
+}
+
+func (r *OrderPostgres) itemExists(rid string) bool {
+	query := fmt.Sprintf("select rid from %s where rid=$1", itemsTable)
+	err := r.db.QueryRow(query, rid).Scan(&rid)
+
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
+// Adds item to order
+func (r *OrderPostgres) createOrderItem(tx *sql.Tx, item model.Item, orderUID string) (uid, rid string, error error) {
+	itemExists := r.itemExists(item.RID)
+	if itemExists == false {
+		query := fmt.Sprintf("insert into %s (rid, chrt_id, track_number, price, name, sale, size, total_price, nm_id, brand_id, status) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", itemsTable)
+
+		brandID, err := r.getBrandIDByName(item.Brand)
+
+		if err != nil {
+			brandID, err = r.createBrand(tx, item.Brand)
+			if err != nil {
+				tx.Rollback()
+				return "", "", err
+			}
+		}
+
+		_, err = tx.Exec(
+			query,
+			item.RID,
+			item.ChrtID,
+			item.TrackNumber,
+			item.Price,
+			item.Name,
+			item.Sale,
+			item.Size,
+			item.TotalPrice,
+			item.NmID,
+			brandID,
+			item.Status,
+		)
+
+		if err != nil {
+			tx.Rollback()
+			return "", "", err
+		}
+
+	}
+
+	query := fmt.Sprintf("insert into %s (order_uid, item_rid) values ($1, $2)", ordersItemsTable)
+	_, err := tx.Exec(query, orderUID, item.RID)
+	if err != nil {
+		tx.Rollback()
+		return "", "", err
+	}
+
+	return orderUID, rid, nil
 }
