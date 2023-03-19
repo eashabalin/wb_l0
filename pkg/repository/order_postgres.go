@@ -84,7 +84,7 @@ func (r *OrderPostgres) Create(order model.Order) (string, error) {
 	return order.UID, tx.Commit()
 }
 
-func (r *OrderPostgres) Get(uid string) (*model.Order, bool) {
+func (r *OrderPostgres) GetByUID(uid string) (*model.Order, bool) {
 	var order model.Order
 
 	query := fmt.Sprintf(`select o.order_uid, o.track_number, o.entry, l.locale, o.internal_signature, o.customer_id, ds.delivery_service, o.shardkey, o.sm_id, o.date_created, o.oof_shard,
@@ -180,6 +180,72 @@ func (r *OrderPostgres) getOrderItems(uid string) []model.Item {
 		items = append(items, item)
 	}
 	return items
+}
+
+func (r *OrderPostgres) GetAll() []model.Order {
+	var orders []model.Order
+
+	query := fmt.Sprintf(`select o.order_uid, o.track_number, o.entry, l.locale, o.internal_signature, o.customer_id, ds.delivery_service, o.shardkey, o.sm_id, o.date_created, o.oof_shard,
+       								d.name d_name, d.phone d_phone, d.zip d_zip, ct.city d_city, d.address d_address, r.region d_region, d.email d_email,
+       								p.transaction p_transaction, p.request_id p_request_id, c.currency p_currency, pp.provider p_provider, p.amount p_amount, p.payment_dt p_payment_dt, b.bank p_bank, p.delivery_cost p_delivery_cost, p.goods_total p_goods_total, p.custom_fee p_custom_fee
+								from orders o
+    								inner join delivery_services ds on ds.id = o.delivery_service_id
+    								inner join locales l on l.id = o.locale_id
+    								inner join deliveries d on o.order_uid = d.order_uid
+    								inner join cities ct on ct.id = d.city_id
+    								inner join regions r on r.id = ct.region_id
+    								inner join payments p on o.order_uid = p.order_uid
+    								inner join currencies c on c.id = p.currency_id
+    								inner join payment_providers pp on p.provider_id = pp.id
+    								inner join banks b on p.bank_id = b.id;`)
+	rows, err := r.db.Query(query)
+
+	for rows.Next() {
+		var order model.Order
+
+		err = rows.Scan(
+			&(order.UID),
+			&(order.TrackNumber),
+			&(order.Entry),
+			&(order.Locale),
+			&(order.InternalSignature),
+			&(order.CustomerID),
+			&(order.DeliveryService),
+			&(order.ShardKey),
+			&(order.SmID),
+			&(order.DateCreated),
+			&(order.OofShard),
+			&(order.Delivery.Name),
+			&(order.Delivery.Phone),
+			&(order.Delivery.Zip),
+			&(order.Delivery.City),
+			&(order.Delivery.Address),
+			&(order.Delivery.Region),
+			&(order.Delivery.Email),
+			&(order.Payment.Transaction),
+			&(order.Payment.RequestID),
+			&(order.Payment.Currency),
+			&(order.Payment.Provider),
+			&(order.Payment.Amount),
+			&(order.Payment.PaymentDatetime),
+			&(order.Payment.Bank),
+			&(order.Payment.DeliveryCost),
+			&(order.Payment.GoodsTotal),
+			&(order.Payment.CustomFee),
+		)
+
+		if err != nil {
+			return []model.Order{}
+		}
+
+		items := r.getOrderItems(order.UID)
+
+		order.Items = items
+
+		orders = append(orders, order)
+	}
+
+	return orders
 }
 
 func (r *OrderPostgres) getDeliveryServiceIDByName(name string) (int, error) {

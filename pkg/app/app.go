@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"time"
+	"wb_l0/pkg/handler/http"
 	"wb_l0/pkg/handler/nats_streaming"
 	"wb_l0/pkg/repository"
 	"wb_l0/pkg/service"
@@ -63,12 +64,20 @@ func (a *App) Run() {
 	repos := repository.NewRepository(db)
 	services := service.NewService(repos)
 	handlers := nats_streaming.NewHandler(services)
+	httpHandlers := http.NewHandler(services)
 
-	a.runServer()
+	a.runServer(httpHandlers)
 	a.runStanSub(natsURL, handlers.CreateOrder)
 }
 
-func (a *App) runServer() {
+func (a *App) runServer(handlers *http.Handler) {
+	srv := new(Server)
+	go func() {
+		err := srv.Run(viper.GetString("port"), handlers.InitRoutes())
+		if err != nil {
+			log.Fatalln("error running server: ", err)
+		}
+	}()
 }
 
 func (a *App) runStanSub(natsServerURL string, handler func(msg *stan.Msg)) {

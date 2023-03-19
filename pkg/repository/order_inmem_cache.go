@@ -7,7 +7,7 @@ type OrderInMemCache struct {
 }
 
 func NewOrderInMemCache() *OrderInMemCache {
-	cache := NewCache(3)
+	cache := NewCache(1000000)
 	return &OrderInMemCache{cache: cache}
 }
 

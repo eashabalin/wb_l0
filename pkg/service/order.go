@@ -11,7 +11,12 @@ type OrderService struct {
 }
 
 func NewOrderService(repo repository.OrderDB, cache repository.OrderCache) *OrderService {
-	return &OrderService{postgres: repo, cache: cache}
+	orders := repo.GetAll()
+	for _, order := range orders {
+		cache.Set(order)
+	}
+	service := OrderService{postgres: repo, cache: cache}
+	return &service
 }
 
 func (s *OrderService) Create(order model.Order) (string, error) {
@@ -23,14 +28,18 @@ func (s *OrderService) Create(order model.Order) (string, error) {
 	return uid, nil
 }
 
-func (s *OrderService) Get(uid string) (*model.Order, bool) {
+func (s *OrderService) GetByUID(uid string) (*model.Order, bool) {
 	order, exists := s.cache.Get(uid)
 	if exists {
 		return order, true
 	}
-	order, exists = s.postgres.Get(uid)
+	order, exists = s.postgres.GetByUID(uid)
 	if exists {
 		return order, true
 	}
 	return nil, false
+}
+
+func (s *OrderService) GetAllFromDB() []model.Order {
+	return s.postgres.GetAll()
 }

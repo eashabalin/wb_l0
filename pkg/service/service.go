@@ -7,7 +7,8 @@ import (
 
 type Order interface {
 	Create(order model.Order) (string, error)
-	Get(uid string) (*model.Order, bool)
+	GetByUID(uid string) (*model.Order, bool)
+	GetAllFromDB() []model.Order
 }
 
 type Service struct {
