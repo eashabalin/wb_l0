@@ -5,8 +5,9 @@ import (
 	"wb_l0/pkg/model"
 )
 
-type Order interface {
+type OrderDB interface {
 	Create(order model.Order) (string, error)
+	Get(uid string) (*model.Order, bool)
 }
 
 type OrderCache interface {
@@ -16,13 +17,13 @@ type OrderCache interface {
 }
 
 type Repository struct {
-	Order
+	OrderDB
 	OrderCache
 }
 
 func NewRepository(db *sqlx.DB) *Repository {
 	return &Repository{
-		Order:      NewOrderPostgres(db),
+		OrderDB:    NewOrderPostgres(db),
 		OrderCache: NewOrderInMemCache(),
 	}
 }

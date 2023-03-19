@@ -30,9 +30,7 @@ func (c *Cache) Set(key string, value any) {
 	c.Lock()
 	defer c.Unlock()
 
-	if element, exists := c.items[key]; exists {
-		c.queue.MoveToFront(element)
-		element.Value.(*CacheItem).Value = value
+	if _, exists := c.items[key]; exists {
 		return
 	}
 

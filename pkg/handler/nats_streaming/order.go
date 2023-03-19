@@ -17,4 +17,11 @@ func (h *Handler) CreateOrder(m *stan.Msg) {
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	o, exists := h.services.Order.Get("b563feb7b2b84b6")
+	if exists {
+		fmt.Println(o)
+	} else {
+		fmt.Println("does not exist")
+	}
 }
