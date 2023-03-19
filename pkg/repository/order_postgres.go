@@ -23,12 +23,6 @@ func (r *OrderPostgres) Create(order model.Order) (string, error) {
 		return "", err
 	}
 
-	// firstly create delivery_service
-	// secondly locale
-	// thirdly delivery
-	// fourthly payment
-	// then items
-
 	fmt.Printf("%+v\n", order)
 
 	deliveryServiceID, err := r.getDeliveryServiceIDByName(order.DeliveryService)
